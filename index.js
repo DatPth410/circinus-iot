@@ -1,13 +1,12 @@
 const express = require("express");
+const cors = require("cors");
 const http = require("http");
 const socketIO = require("socket.io");
-const { google } = require("googleapis");
 const qs = require("qs");
 const { default: axios } = require("axios");
 
 const app = express();
-const server = http.createServer(app);
-const io = socketIO(server);
+app.use(cors());
 
 const getAcceToken = async () => {
   var data = qs.stringify({
@@ -80,11 +79,22 @@ const readMail = async (id) => {
     return error;
   }
 };
-let lastId = "";
-let change = false;
 
-io.on("connection", async (socket) => {
-  const intervalId = setInterval(async () => {
+const server = app.listen(3000, () => {
+  console.log("Server started on port 3000");
+});
+
+const io = require("socket.io")(server, {
+  cors: {
+    origin: "*",
+  },
+});
+
+let lastId = "";
+let sendFlag = false;
+let message = "";
+const intervalId = setInterval(async () => {
+  try {
     const mails = await getAllMail();
     const currentLastId = mails.messages[0].id;
     if (currentLastId !== lastId) {
@@ -95,26 +105,40 @@ io.on("connection", async (socket) => {
         console.log(mails.messages[0]);
 
         if (mail.snippet.includes("circinus:")) {
-          socket.emit("message", mail.snippet);
+          console.log("sent to event : message - " + mail.snippet);
+          // socket.emit("message", { message: mail.snippet });
+          message = mail.snippet;
+          sendFlag = true;
         }
       }
 
       lastId = currentLastId;
     }
+  } catch (error) {
+    console.log(error);
+  }
+}, 1000);
+
+io.on("connection", async (socket) => {
+  const interval = setInterval(() => {
+    socket.emit("check-connection", {
+      message: "This event is emitted every 5 seconds",
+    });
+  }, 5000);
+
+  const intervalId1 = setInterval(() => {
+    if (sendFlag) {
+      io.emit("message", {
+        message,
+      });
+      sendFlag = false;
+    }
   }, 1000);
+
   console.log("A user has connected.");
 
   socket.on("disconnect", () => {
     console.log("A user has disconnected.");
   });
-
-  if (change) {
-    change = false;
-  }
 });
-
-server.listen(3000, () => {
-  console.log("Server is listening on port 3000");
-});
-
 // console.log("hello");
