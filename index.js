@@ -88,6 +88,7 @@ const io = require("socket.io")(server, {
   cors: {
     origin: "*",
   },
+  transports: ["polling"],
 });
 
 let lastId = "";
